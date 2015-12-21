@@ -12,22 +12,47 @@ import java.util.List;
  */
 public class BuildAST extends MinijavaBaseVisitor<Klass> {
 
+    @Override public Klass visitGoal(@NotNull MinijavaParser.GoalContext ctx) {
+        String rootPath = "Program/";
+        ctx.setPath(rootPath);
+        visit(ctx.mainClass());
+        int classCount = 0;
+        for(MinijavaParser.ClassDeclarationContext classCtx : ctx.classDeclaration()){
+            ctx.setPath(rootPath + "/Class" + classCount);
+            visit(classCtx);
+            classCount++;
+        }
+        return null;
+    }
+
 
     @Override
     public Klass visitMainClass(@NotNull MinijavaParser.MainClassContext ctx) {
-        ctx.setPath("/Main Class:"+ctx.Identifier(0).getText());
+        ctx.setPath(ctx.getParent().getPath()+ "/MainClass:" + ctx.Identifier(0).getText());
         System.out.println(ctx.getPath());
         return visitChildren(ctx);
     }
 
     @Override public Klass visitClassDeclaration(@NotNull MinijavaParser.ClassDeclarationContext ctx) {
-        ctx.setPath("/Class:" + ctx.Identifier(0).getText());
+        ctx.setPath(ctx.getParent().getPath() + "/ClassName:" + ctx.Identifier(0).getText());
         System.out.println(ctx.getPath());
         if(ctx.Identifier().size() == 2)
         {
-            System.out.println(ctx.getPath() + "/SuperClass" + ctx.Identifier(1).getText());
+            System.out.println(ctx.getPath() + "/SuperClass:" + ctx.Identifier(1).getText());
         }
-        return visitChildren(ctx);
+        int fieldCount =0;
+        for(MinijavaParser.FieldDeclarationContext fieldCtx : ctx.fieldDeclaration()){
+            ctx.setPath(ctx.getParent().getPath() + "/Field" + fieldCount);
+            visit(fieldCtx);
+            fieldCount++;
+        }
+        int methodCount = 0;
+        for(MinijavaParser.MethodDeclarationContext methodCtx : ctx.methodDeclaration()){
+            ctx.setPath(ctx.getParent().getPath() + "/Method" + methodCount);
+            visit(methodCtx);
+            methodCount++;
+        }
+        return null;
     }
 
     @Override public Klass visitFieldDeclaration(@NotNull MinijavaParser.FieldDeclarationContext ctx) {
@@ -43,16 +68,15 @@ public class BuildAST extends MinijavaBaseVisitor<Klass> {
     }
 
     @Override public Klass visitMethodDeclaration(@NotNull MinijavaParser.MethodDeclarationContext ctx) {
-        ctx.setPath(ctx.getParent().getPath() + "/MethodDecl");
-        System.out.println(ctx.getPath());
-        System.out.println(ctx.getPath() + "/MethodName:" + ctx.Identifier().getText());
-        ctx.setPath(ctx.getPath() + "/RetType");
+
+        System.out.println(ctx.getParent().getPath() + "/MethodName:" + ctx.Identifier().getText());
+        ctx.setPath(ctx.getParent().getPath() + "/RetType");
         visit(ctx.type());
         if(ctx.parameterList() != null) {
-            ctx.setPath(ctx.getPath() + "/Params");
+            ctx.setPath(ctx.getParent().getPath() + "/Params");
             visit(ctx.parameterList());
         }
-        ctx.setPath(ctx.getPath() + "/MethodBody");
+        ctx.setPath(ctx.getParent().getPath() + "/MethodBody");
         visit(ctx.methodBody());
         return null;
     }
@@ -68,7 +92,7 @@ public class BuildAST extends MinijavaBaseVisitor<Klass> {
     @Override public Klass visitParameterList(@NotNull MinijavaParser.ParameterListContext ctx) {
         List<Klass> parameterList = new ArrayList<Klass>();
         int paramCount = 0;
-        for(MinijavaParser.ParameterContext paramCtx : ctx.parameter().subList(1, ctx.parameter().size())){
+        for(MinijavaParser.ParameterContext paramCtx : ctx.parameter()){
             ctx.setPath(ctx.getParent().getPath() + "/Param" + paramCount);
             parameterList.add(visit(paramCtx));
             paramCount++;
@@ -82,7 +106,7 @@ public class BuildAST extends MinijavaBaseVisitor<Klass> {
             ctx.setPath(ctx.getParent().getPath() + "/Locals");
             System.out.println(ctx.getPath());
             int localCount = 0;
-            for(MinijavaParser.LocalDeclarationContext localDecl : ctx.localDeclaration().subList(0, ctx.localDeclaration().size())){
+            for(MinijavaParser.LocalDeclarationContext localDecl : ctx.localDeclaration()){
                 ctx.setPath(ctx.getParent().getPath() + "/Local" + localCount);
                 visit(localDecl);
                 localCount++;
@@ -93,7 +117,7 @@ public class BuildAST extends MinijavaBaseVisitor<Klass> {
             ctx.setPath(ctx.getParent().getPath() + "/Stmts");
             System.out.println(ctx.getPath());
             int stmtCount = 0;
-            for(MinijavaParser.StatementContext stmt : ctx.statement().subList(0, ctx.statement().size())){
+            for(MinijavaParser.StatementContext stmt : ctx.statement()){
                 ctx.setPath(ctx.getParent().getPath() + "/Stmt" + stmtCount);
                 visit(stmt);
                 stmtCount++;
@@ -126,10 +150,14 @@ public class BuildAST extends MinijavaBaseVisitor<Klass> {
     }
 
     @Override public Klass visitIfElseStatement(@NotNull MinijavaParser.IfElseStatementContext ctx) {
-
         ctx.setPath(ctx.getParent().getPath() + "/If-Then-Else");
         System.out.println(ctx.getPath());
-        return visitChildren(ctx);
+        ctx.setPath(ctx.getPath() + "/Condition");
+        visit(ctx.expression());
+        ctx.setPath(ctx.getParent().getPath() + "/If-Then-Else");
+        visit(ctx.ifBlock());
+        visit(ctx.elseBlock());
+        return null;
     }
 
     @Override public Klass visitIfBlock(@NotNull MinijavaParser.IfBlockContext ctx) {
@@ -148,7 +176,11 @@ public class BuildAST extends MinijavaBaseVisitor<Klass> {
     @Override public Klass visitWhileStatement(@NotNull MinijavaParser.WhileStatementContext ctx) {
         ctx.setPath(ctx.getParent().getPath() + "/While");
         System.out.println(ctx.getPath());
-        return visitChildren(ctx);
+        ctx.setPath(ctx.getPath() + "/Condition");
+        visit(ctx.expression());
+        ctx.setPath(ctx.getParent().getPath() + "/While");
+        visit(ctx.whileBlock());
+        return null;
     }
 
     @Override public Klass visitWhileBlock(@NotNull MinijavaParser.WhileBlockContext ctx) {
@@ -166,13 +198,21 @@ public class BuildAST extends MinijavaBaseVisitor<Klass> {
     @Override public Klass visitVariableAssignmentStatement(@NotNull MinijavaParser.VariableAssignmentStatementContext ctx) {
         ctx.setPath(ctx.getParent().getPath() + "/VarAssign");
         System.out.println(ctx.getPath());
-        return visitChildren(ctx);
+        System.out.println(ctx.getPath() + "/VarName:" + ctx.Identifier());
+        ctx.setPath(ctx.getPath() + "/AssignValue");
+        visit(ctx.expression());
+        return null;
     }
 
     @Override public Klass visitArrayAssignmentStatement(@NotNull MinijavaParser.ArrayAssignmentStatementContext ctx) {
         ctx.setPath(ctx.getParent().getPath() + "/ArrayAssign");
         System.out.println(ctx.getPath());
-        return visitChildren(ctx);
+        System.out.println(ctx.getPath() + "/ArrayName:" + ctx.Identifier());
+        ctx.setPath(ctx.getPath() + "/ArrayIndex");
+        visit(ctx.expression(0));
+        ctx.setPath(ctx.getParent().getPath() + "/ArrayAssign/AssignValue");
+        visit(ctx.expression(1));
+        return null;
     }
 
     @Override public Klass visitArrayAccessExpression(@NotNull MinijavaParser.ArrayAccessExpressionContext ctx) {
